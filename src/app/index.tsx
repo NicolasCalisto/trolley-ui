@@ -1,9 +1,10 @@
 import CustomButton from "@/components/customButton"
-import { Alert, Image, StyleSheet, Text, View, ScrollView } from "react-native"
+import { Alert, Image, StyleSheet, Text, View, ScrollView, KeyboardAvoidingView, Platform } from "react-native"
+import { router } from 'expo-router'; 
 
 export default function Index() {
     return (
-       <ScrollView style={styles.container}>
+        <ScrollView style={styles.container} contentContainerStyle={{flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <Image
                 source={require("@/assets/image.png")}
                 style={styles.illustration}
@@ -25,19 +26,17 @@ export default function Index() {
                 <CustomButton 
                     title="Criar conta" 
                     type="primary"
-                    onPress={() => Alert.alert('Começar clicado!')} 
+                    onPress={() => router.push('/signup')} 
                 />
 
                 <CustomButton 
-                    title="Entrar" 
+                    title="Começar Agora" 
                     type="secondary"
-                    onPress={() => Alert.alert('ENTRAR AGORA!')} 
+                    onPress={() => router.push('/home')} 
                 />
             </View>
 
-        
-    
-       </ScrollView>
+        </ScrollView>
     )
 }
 
