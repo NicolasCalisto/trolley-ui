@@ -5,6 +5,7 @@ import React, { useState } from "react";
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function Signup() {
+    const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
@@ -28,6 +29,13 @@ export default function Signup() {
                 </Text>
 
                 <View style={styles.inputGroup}>
+                    <CustomInput 
+                        placeholder="Nome"
+                        autoCapitalize="none"
+                        value={name}
+                        onChangeText={setName}
+                    />
+
                     <CustomInput 
                         placeholder="E-mail"
                         keyboardType="email-address"
@@ -61,7 +69,7 @@ export default function Signup() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#121826",
+        backgroundColor: "#0d1321",
     },
     scrollContent: {
         flexGrow: 1,
