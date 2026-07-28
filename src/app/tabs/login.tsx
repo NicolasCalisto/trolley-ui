@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import React, { useState } from "react"; 
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 
-export default function Signup() {
+export default function Login() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');

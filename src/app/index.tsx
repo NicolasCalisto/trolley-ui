@@ -26,13 +26,13 @@ export default function Index() {
                 <CustomButton 
                     title="Criar conta" 
                     type="primary"
-                    onPress={() => router.push('/signup')} 
+                    onPress={() => router.push('/tabs/login')} 
                 />
 
                 <CustomButton 
                     title="Começar Agora" 
                     type="secondary"
-                    onPress={() => router.push('/home')} 
+                    onPress={() => router.push('/tabs/home')} 
                 />
             </View>
 

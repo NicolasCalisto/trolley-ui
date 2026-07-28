@@ -1,10 +1,23 @@
+import React, { useState } from "react"
 import CustomButton from "@/components/customButton"
 import { Alert, Image, StyleSheet, Text, View, ScrollView, KeyboardAvoidingView, Platform } from "react-native"
 import { router } from 'expo-router'; 
-import Icon  from "react-native-vector-icons/FontAwesome5";
+import { FontAwesome5 } from "@expo/vector-icons";
 import { CustomBox } from "@/components/customBox";
+import { CreateListModal } from "@/components/modal/createOrCopyModal";
 
 export default function Home() {
+    const [isModalVisible, setIsModalVisible] = useState(false);
+
+    const handleSelectOption = (type: 'NEW' | 'DUPLICATE') => {
+        setIsModalVisible(false);
+        if (type === 'DUPLICATE') {
+            router.push({ pathname: '/tabs/planning', params: { mode: 'duplicate' } });
+        } else {
+            router.push({ pathname: '/tabs/planning', params: { mode: 'new' } });
+        }
+    };
+
     return (
         <ScrollView style={styles.container} contentContainerStyle={{flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             
@@ -14,7 +27,7 @@ export default function Home() {
                 </Text>
 
                 <View style={styles.iconsBox}>
-                    <Icon name="bell" size={24} color="#F59E0B"/>
+                    <FontAwesome5 name="bell" size={24} color="#F59E0B"/>
 
                     <View style={styles.userIconBox}>
                         <Image
@@ -53,17 +66,19 @@ export default function Home() {
                     title="+ criar nova lista" 
                     textStyle={{ fontSize: 18, fontWeight: "400" }}
                     type="primary"
-                    onPress={() => router.push('/home')} 
+                    onPress={() => setIsModalVisible(true)} 
                 />
             </View>
 
-            <View style={styles.listBox}>
+            <View style={styles.listBox}></View>
 
-            </View>
+            <View style={styles.infoBox}></View>
 
-            <View style={styles.infoBox}>
-
-            </View>
+            <CreateListModal 
+                visible={isModalVisible}
+                onClose={() => setIsModalVisible(false)}
+                onSelectOption={handleSelectOption}
+            />
 
         </ScrollView>
     )
@@ -108,7 +123,6 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 18,
-        fontWeight: "bold",
         color: "#fff",
         marginTop: 48,
         textAlign: "start",
