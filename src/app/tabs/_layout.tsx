@@ -1,60 +1,101 @@
-import { Tabs } from 'expo-router';
-import { FontAwesome5 } from '@expo/vector-icons';
-import { View, StyleSheet } from 'react-native';
+import { colors, fonts, radius, spacing } from "@/theme";
+import { FontAwesome5 } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
+import { ColorValue, StyleSheet, Text, View } from "react-native";
+
+type TabIconProps = {
+  name: "home" | "shopping-basket";
+  label: string;
+  color: ColorValue;
+  focused: boolean;
+};
+
+// Aba ativa vira pílula âmbar com ícone e palavra; inativa fica só no ícone.
+function TabIcon({ name, label, color, focused }: TabIconProps) {
+  return (
+    <View style={focused ? styles.activeTab : styles.inactiveTab}>
+      <FontAwesome5 name={name} size={20} color={color} />
+      {focused && <Text style={styles.activeLabel}>{label}</Text>}
+    </View>
+  );
+}
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: false, // Esconde os textos/rótulos abaixo dos ícones
-        tabBarActiveTintColor: '#151b2a',   // Cor do ícone selecionado (Amarelo)
-        tabBarInactiveTintColor: '#AE9E91', // Mesma cor, mas o estilo inativo cuida da opacidade
+        tabBarShowLabel: false, // o rótulo vive dentro da pílula da aba ativa
+        tabBarActiveTintColor: colors.onPrimary,
+        tabBarInactiveTintColor: colors.textSecondary,
+        sceneStyle: { backgroundColor: colors.bg },
         tabBarStyle: {
-          backgroundColor: '#151b2a', 
-          borderTopColor: '#2c354b',
-          height: 70,
+          backgroundColor: colors.surface1,
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: 76,
           paddingBottom: 0,
-          paddingTop: 16,
+          paddingTop: spacing.md,
         },
       }}
     >
-      {/* Rota 1: Home */}
+      {/* Rota 1: cestinhas/home */}
       <Tabs.Screen
         name="home"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeTab : styles.inactiveTab}>
-              <FontAwesome5 
-                name="home" 
-                size={22} 
-                color={color} 
-                style={{ opacity: focused ? 1 : 0.6 }} 
-              />
-            </View>
+            <TabIcon
+              name="shopping-basket"
+              label="Cestinhas"
+              color={color}
+              focused={focused}
+            />
           ),
         }}
       />
 
-      {/* Rota 2: listas */}
-
-      {/* Rota 3: Criar / Adicionar */}
-
-      {/* Rota 4: Perfil */}
-      
-      {/* Rota planning */}
+      {/* Rota 2: nova cestinha */}
       <Tabs.Screen
-        name="planning"
+        name="newList"
         options={{
-          href: null, // esconde a rota de navegação para a tela inicial
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              name="plus"
+              label="Nova Cestinha"
+              color={color}
+              focused={focused}
+            />
+          ),
         }}
       />
 
-      {/* Rota login */}
+      {/* Rota 3: favoritos */}
       <Tabs.Screen
-        name="login"
+        name="favorites"
         options={{
-          href: null,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              name="favorite"
+              label="Favoritos"
+              color={color}
+              focused={focused}
+            />
+          ),
+        }}
+      />
+
+      {/* Rota 4: historico de compras */}
+      <Tabs.Screen
+        name="orders"
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              name="receipt-text-check-outline"
+              label="Sacolas"
+              color={color}
+              focused={focused}
+            />
+          ),
         }}
       />
     </Tabs>
@@ -63,19 +104,24 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   activeTab: {
-    backgroundColor: '#F59E0B', // Fundo destacado do ícone selecionado
-    paddingVertical: 10,
-    paddingHorizontal: 22,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1E293B',    // Borda sutil da caixinha ativa
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+  },
+  activeLabel: {
+    fontFamily: fonts.textMedium,
+    fontSize: 13,
+    color: colors.onPrimary,
   },
   inactiveTab: {
-    paddingVertical: 10,
-    paddingHorizontal: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

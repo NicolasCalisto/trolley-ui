@@ -1,25 +1,105 @@
-import React from 'react';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { FontAwesome5 } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
 import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  TouchableWithoutFeedback,
-} from 'react-native';
+    ActivityIndicator,
+    Modal,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
+} from "react-native";
+
+import { addListProduct, getListProducts } from "../../services/listProducts";
+import { createList, getLists } from "../../services/lists";
+import type { ShoppingList } from "../../services/types";
+import {
+    colors,
+    fonts,
+    radius,
+    spacing,
+    TOUCH_TARGET,
+    typography,
+} from "../../theme";
+import { errorMessage, LIST_STATUS } from "../../theme/listStatus";
+
+const RECENT_LIMIT = 3;
 
 interface CreateOrCopyModal {
   visible: boolean;
   onClose: () => void;
-  onSelectOption: (type: 'NEW' | 'DUPLICATE') => void;
+  onCreateBlank: () => void;
+  onCopied: (list: ShoppingList) => void;
 }
 
 export const CreateListModal: React.FC<CreateOrCopyModal> = ({
   visible,
   onClose,
-  onSelectOption,
+  onCreateBlank,
+  onCopied,
 }) => {
+  const [step, setStep] = useState<"OPTIONS" | "COPY">("OPTIONS");
+  const [recentLists, setRecentLists] = useState<ShoppingList[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [copyingId, setCopyingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      setStep("OPTIONS");
+      setError(null);
+      setCopyingId(null);
+    }
+  }, [visible]);
+
+  const openCopyStep = async () => {
+    setStep("COPY");
+    setError(null);
+
+    try {
+      setLoading(true);
+      const lists = await getLists();
+      setRecentLists(
+        [...lists]
+          .sort(
+            (a, b) =>
+              new Date(b.createDate).getTime() -
+              new Date(a.createDate).getTime(),
+          )
+          .slice(0, RECENT_LIMIT),
+      );
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = async (source: ShoppingList) => {
+    setError(null);
+    setCopyingId(source.id);
+
+    try {
+      const list = await createList(`Cópia de ${source.name}`);
+      const items = await getListProducts(source.id);
+
+      for (const item of items) {
+        await addListProduct({
+          shoppingListId: list.id,
+          productId: item.product.id,
+          plannedQuantity: item.plannedQuantity,
+          basePrice: item.currentPrice ?? item.basePrice ?? 0,
+        });
+      }
+
+      onCopied(list);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setCopyingId(null);
+    }
+  };
+
   return (
     <Modal
       animationType="slide"
@@ -33,47 +113,109 @@ export const CreateListModal: React.FC<CreateOrCopyModal> = ({
           <TouchableWithoutFeedback>
             <View style={styles.modalContent}>
               <View style={styles.indicator} />
-              
-              <Text style={styles.title}>Criar Nova Lista</Text>
-              <Text style={styles.subtitle}>
-                Como você deseja criar a lista?
-              </Text>
 
-              {/* Opção 1: Duplicar Última Compra */}
-              <TouchableOpacity
-                style={[styles.optionCard, styles.primaryCard]}
-                activeOpacity={0.7}
-                onPress={() => onSelectOption('DUPLICATE')}
-              >
-                <Text style={styles.icon}>
-                  <FontAwesome5 name="history" size={20}/>
-                </Text>
-                <View style={styles.cardTextContainer}>
-                  <Text style={styles.primaryCardTitle}>
-                    Copiar de uma lista existente
-                  </Text>
-                  <Text style={styles.primaryCardSub}>
-                    Traz os itens de uma lista de compras.
-                  </Text>
-                </View>
-              </TouchableOpacity>
+              <View style={styles.header}>
+                {step === "COPY" && (
+                  <TouchableOpacity
+                    style={styles.headerAction}
+                    onPress={() => setStep("OPTIONS")}
+                  >
+                    <FontAwesome5
+                      name="arrow-left"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                )}
 
-              {/* Opção 2: Do Zero */}
-              <TouchableOpacity
-                style={styles.optionCard}
-                activeOpacity={0.7}
-                onPress={() => onSelectOption('NEW')}
-              >
-                <Text style={styles.icon}>
-                  <FontAwesome5 name="plus-circle" size={20}/>
+                <Text style={styles.title}>
+                  {step === "OPTIONS" ? "Nova cestinha" : "Copiar de"}
                 </Text>
-                <View style={styles.cardTextContainer}>
-                  <Text style={styles.cardTitle}>Criar Lista em Branco</Text>
-                  <Text style={styles.cardSub}>
-                    Adicione itens manualmente do catálogo.
-                  </Text>
-                </View>
-              </TouchableOpacity>
+
+                <TouchableOpacity style={styles.headerAction} onPress={onClose}>
+                  <FontAwesome5
+                    name="times"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {step === "OPTIONS" ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.optionCard}
+                    activeOpacity={0.7}
+                    onPress={onCreateBlank}
+                  >
+                    <Text style={styles.emoji}>🧺</Text>
+                    <View style={styles.cardTextContainer}>
+                      <Text style={styles.cardTitle}>Começar do zero</Text>
+                      <Text style={styles.cardSub}>
+                        Uma cestinha vazia pra você encher do seu jeito.
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.optionCard}
+                    activeOpacity={0.7}
+                    onPress={openCopyStep}
+                  >
+                    <Text style={styles.emoji}>🔁</Text>
+                    <View style={styles.cardTextContainer}>
+                      <Text style={styles.cardTitle}>Copiar uma cestinha</Text>
+                      <Text style={styles.cardSub}>
+                        Traz os itens e as quantidades de uma cestinha recente.
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </>
+              ) : loading ? (
+                <ActivityIndicator
+                  size="large"
+                  color={colors.primary}
+                  style={styles.loader}
+                />
+              ) : recentLists.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  Sua cestinha está vazia. Bora encher?
+                </Text>
+              ) : (
+                recentLists.map((list) => {
+                  const status = LIST_STATUS[list.status];
+                  return (
+                    <TouchableOpacity
+                      key={list.id}
+                      style={styles.optionCard}
+                      activeOpacity={0.7}
+                      disabled={copyingId !== null}
+                      onPress={() => handleCopy(list)}
+                    >
+                      <Text style={styles.emoji}>🧺</Text>
+                      <View style={styles.cardTextContainer}>
+                        <Text style={styles.cardTitle} numberOfLines={1}>
+                          {list.name}
+                        </Text>
+                        <Text style={styles.cardSub}>
+                          {status.label} ·{" "}
+                          <Text style={styles.cardDate}>
+                            {new Date(list.createDate).toLocaleDateString(
+                              "pt-BR",
+                            )}
+                          </Text>
+                        </Text>
+                      </View>
+
+                      {copyingId === list.id && (
+                        <ActivityIndicator color={colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+
+              {error && <Text style={styles.errorText}>{error}</Text>}
 
               {/* Botão Cancelar */}
               <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
@@ -90,85 +232,96 @@ export const CreateListModal: React.FC<CreateOrCopyModal> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: '#1E1E2C', // Fundo escuro seguindo o padrão
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    alignItems: 'center',
+    backgroundColor: colors.surface1,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl,
+    alignItems: "center",
+    gap: spacing.md,
   },
   indicator: {
     width: 40,
     height: 4,
-    backgroundColor: '#44445A',
-    borderRadius: 2,
-    marginBottom: 16,
+    backgroundColor: colors.border,
+    borderRadius: radius.pill,
+    alignSelf: "center",
+  },
+  header: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  headerAction: {
+    width: TOUCH_TARGET,
+    height: TOUCH_TARGET,
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#F59E0B',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#A0A0B0',
-    marginBottom: 20,
-    textAlign: 'center',
+    flex: 1,
+    ...typography.sectionTitle,
+    color: colors.primary,
   },
   optionCard: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2A2A3C',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#3A3A50',
-
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface2,
+    padding: spacing.lg,
+    borderRadius: radius.card,
+    gap: spacing.lg,
+    minHeight: TOUCH_TARGET + 16,
   },
-  primaryCard: {
-    borderColor: '#2ECC71', // Destaque em verde para a ação mais comum
-    backgroundColor: '#1C2E2A',
-  },
-  icon: {
-    marginRight: 16,
-    color: '#F59E0B',
+  emoji: {
+    fontSize: 24,
   },
   cardTextContainer: {
     flex: 1,
-  },
-  primaryCardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#00E676',
-  },
-  primaryCardSub: {
-    fontSize: 12,
-    color: '#B0BEC5',
-    marginTop: 2,
+    gap: 2,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    ...typography.itemName,
+    color: colors.text,
   },
   cardSub: {
-    fontSize: 12,
-    color: '#A0A0B0',
-    marginTop: 2,
+    fontFamily: fonts.text,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  cardDate: {
+    ...typography.numberSmall,
+    color: colors.textSecondary,
+  },
+  loader: {
+    paddingVertical: spacing.xxl,
+  },
+  emptyText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: "center",
+    paddingVertical: spacing.xl,
+  },
+  errorText: {
+    ...typography.label,
+    color: colors.tertiary,
+    textAlign: "center",
   },
   cancelButton: {
-    marginTop: 8,
-    paddingVertical: 12,
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+    alignSelf: "center",
   },
   cancelText: {
-    color: '#FF5252',
+    fontFamily: fonts.textMedium,
     fontSize: 15,
-    fontWeight: '600',
+    color: colors.textSecondary,
   },
 });

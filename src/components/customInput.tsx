@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { StyleSheet, TextInput, TextInputProps, View } from "react-native";
+
+import { colors, fonts, radius, TOUCH_TARGET } from "@/theme";
 
 interface CustomInputProps extends TextInputProps {
   // Você pode adicionar propriedades customizadas aqui no futuro (ex: ícones, mensagens de erro)
@@ -9,16 +11,16 @@ export default function CustomInput({ style, ...rest }: CustomInputProps) {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
-    <View 
+    <View
       style={[
-        styles.container, 
-        // Destaca a borda com a cor laranja do botão quando o usuário clica no input
-        isFocused && styles.containerFocused 
+        styles.container,
+        // Destaca a borda com a cor da marca quando o usuário clica no input
+        isFocused && styles.containerFocused,
       ]}
     >
       <TextInput
         style={[styles.input, style]}
-        placeholderTextColor="#64748b" // Cor de placeholder cinza sutil
+        placeholderTextColor={colors.textMuted}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         {...rest}
@@ -29,22 +31,23 @@ export default function CustomInput({ style, ...rest }: CustomInputProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#1d232a', // Mesmo fundo cinza escuro do botão secundário
-    width: 350, // Mesma largura exata dos seus botões para alinhar perfeitamente
-    height: 58, // Altura proporcional ao padding vertical do botão
-    borderRadius: 16, // Mesmo arredondamento dos botões
+    backgroundColor: colors.surface2,
+    width: "100%",
+    minHeight: TOUCH_TARGET + 8,
+    borderRadius: radius.input,
     borderWidth: 1,
-    borderColor: '#262f3a', // Mesma borda sutil do botão secundário
+    borderColor: colors.border,
     paddingHorizontal: 16,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   containerFocused: {
-    borderColor: '#f59f0b', // Borda laranja ao focar para dar feedback visual
+    borderColor: colors.primary,
   },
   input: {
-    color: '#FFFFFF', // Texto digitado fica branco
+    color: colors.text,
+    fontFamily: fonts.text,
     fontSize: 16,
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
 });

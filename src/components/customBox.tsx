@@ -1,51 +1,54 @@
 import React from "react";
-import { StyleSheet, Text, View, DimensionsValue, DimensionValue  } from "react-native";
+import { DimensionValue, StyleSheet, Text, View } from "react-native";
+
+import { colors, radius, typography } from "@/theme";
 
 interface CustomBox {
-    value: string | number;
-    label: string;
-    valueColor?: string;
-    width: DimensionValue;
+  value: string | number;
+  label: string;
+  valueColor?: string;
+  width?: DimensionValue;
 }
 
-export const CustomBox: React.FC<CustomBox> = ({ 
-    value, 
-    label, 
-    valueColor = "#fff", 
-    width = "30%"
+export const CustomBox: React.FC<CustomBox> = ({
+  value,
+  label,
+  valueColor = colors.text,
+  width = "31%",
 }) => {
-    return (
-        <View style={[styles.container, { width }]}>
-            <Text style={[styles.value, { color: valueColor }]}>
-                {value}
-            </Text>
-            <Text style={styles.label}>
-                {label}
-            </Text>
-        </View>
-    );
+  return (
+    <View style={[styles.container, { width }]}>
+      <Text
+        style={[styles.value, { color: valueColor }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {value}
+      </Text>
+      <Text style={styles.label}>{label}</Text>
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-    backgroundColor: '#151b2a',
-    borderRadius: 4,
-    paddingVertical: 20,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    aspectRatio: 1, 
+  container: {
+    backgroundColor: colors.surface1,
+    borderRadius: radius.card,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    minHeight: 104,
   },
   value: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 6,
-    textAlign: 'center',
+    ...typography.numberHighlight,
+    fontSize: 24,
+    textAlign: "center",
   },
   label: {
-    fontSize: 14,
-    color: '#AE9E91',
-    fontWeight: '500',
-    textAlign: 'center',
+    ...typography.label,
+    color: colors.textSecondary,
+    textAlign: "center",
   },
 });

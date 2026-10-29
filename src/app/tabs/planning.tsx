@@ -1,202 +1,417 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { FontAwesome5 } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { FontAwesome5 } from '@expo/vector-icons';
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
 
-// IMPORTS EXTERNOS (Componentes e Mocks)
-import { CategoryTabs } from '../../components/modal/category';
-import { CATEGORIES_MOCK } from '../../mocks/category';
+import { ALL_CATEGORIES, CategoryTabs } from "../../components/modal/category";
+import { ProductPickerModal } from "../../components/modal/productPicker";
+import { getCategories } from "../../services/categories";
+import {
+    addListProduct,
+    deleteListProduct,
+    getListProducts,
+    toggleListProductCheck,
+    updateListProduct,
+} from "../../services/listProducts";
+import {
+    duplicateLastList,
+    getListById,
+    updateListStatus,
+} from "../../services/lists";
+import type {
+    Category,
+    ListProduct,
+    Product,
+    ShoppingList,
+} from "../../services/types";
+import {
+    colors,
+    fonts,
+    radius,
+    spacing,
+    TOUCH_TARGET,
+    typography,
+} from "../../theme";
+import { categoryEmoji } from "../../theme/categoryEmoji";
+import { errorMessage } from "../../theme/listStatus";
 
-interface ListItem {
-  id: string;
-  productId: string;
-  name: string;
-  category: string;
-  quantity: number;
-}
+const currency = (value: number) =>
+  value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// A API pode devolver preços nulos enquanto o item nunca foi comprado.
+const priceOf = (item: ListProduct) => item.currentPrice ?? item.basePrice ?? 0;
 
 export default function PlanningScreen() {
   const router = useRouter();
-  const { mode } = useLocalSearchParams<{ mode: string }>();
+  const { mode, listId } = useLocalSearchParams<{
+    mode?: string;
+    listId?: string;
+  }>();
 
-  const [items, setItems] = useState<ListItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
+  const [list, setList] = useState<ShoppingList | null>(null);
+  const [items, setItems] = useState<ListProduct[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] =
+    useState<string>(ALL_CATEGORIES);
+  const [isCatalogVisible, setCatalogVisible] = useState(false);
+
+  // Garante que a lista só seja criada/duplicada uma vez, mesmo com re-execuções do efeito.
+  const bootstrapped = useRef(false);
+
+  const resolveList = useCallback((): Promise<ShoppingList> => {
+    if (listId) {
+      return getListById(Number(listId));
+    }
+    if (mode === "duplicate") {
+      return duplicateLastList();
+    }
+    return Promise.reject(new Error("Nenhuma cestinha escolhida."));
+  }, [listId, mode]);
 
   useEffect(() => {
-    if (mode === 'duplicate') {
-      loadLastPurchase();
-    }
-  }, [mode]);
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
 
-  const loadLastPurchase = async () => {
-    try {
-      setLoading(true);
-      
-      // Futura chamada de API:
-      // const response = await api.get('/lists/last-finished');
-      // setItems(response.data.items);
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      // Simulação rápida enquanto sem backend:
-      setTimeout(() => {
-        setItems([
-          { id: '1', productId: 'p1', name: 'Leite Integral', category: 'Laticínios', quantity: 4 },
-          { id: '2', productId: 'p2', name: 'Arroz 5kg', category: 'Mercearia', quantity: 1 },
-          { id: '3', productId: 'p3', name: 'Café 500g', category: 'Mercearia', quantity: 2 },
+        const currentList = await resolveList();
+        setList(currentList);
+
+        const [listItems, categoryList] = await Promise.all([
+          getListProducts(currentList.id),
+          getCategories(),
         ]);
-        setLoading(false);
-      }, 500);
-    } catch (error) {
-      setLoading(false);
-      Alert.alert('Erro', 'Não foi possível carregar a última compra.');
-    }
-  };
 
-  // Filtragem dinâmica dos itens por categoria selecionada
+        setItems(listItems);
+        setCategories(categoryList);
+      } catch (err) {
+        setError(errorMessage(err));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [resolveList]);
+
+  // Filtragem por categoria, com o que já foi pego descendo para o fim da lista
   const filteredItems = useMemo(() => {
-    if (selectedCategory === 'Todas') return items;
-    return items.filter(
-      (item) => item.category.toLowerCase() === selectedCategory.toLowerCase()
-    );
+    const visible =
+      selectedCategory === ALL_CATEGORIES
+        ? items
+        : items.filter(
+            (item) => item.product.category?.name === selectedCategory,
+          );
+
+    return [...visible].sort((a, b) => Number(a.checked) - Number(b.checked));
   }, [items, selectedCategory]);
 
-  // Alterar quantidade
-  const handleUpdateQuantity = (id: string, delta: number) => {
+  const checkedCount = useMemo(
+    () => items.filter((item) => item.checked).length,
+    [items],
+  );
+
+  const progress = items.length > 0 ? checkedCount / items.length : 0;
+
+  const total = useMemo(
+    () =>
+      items.reduce(
+        (sum, item) => sum + priceOf(item) * item.plannedQuantity,
+        0,
+      ),
+    [items],
+  );
+
+  // Alterar quantidade (PUT /list-products/{id} espera isChecked, a resposta traz checked)
+  const handleUpdateQuantity = async (item: ListProduct, delta: number) => {
+    const newQuantity = item.plannedQuantity + delta;
+    if (newQuantity < 1) return;
+
+    const previous = items;
     setItems((prev) =>
-      prev
-        .map((item) => {
-          if (item.id === id) {
-            const newQty = item.quantity + delta;
-            return newQty > 0 ? { ...item, quantity: newQty } : null;
-          }
-          return item;
-        })
-        .filter(Boolean) as ListItem[]
+      prev.map((it) =>
+        it.id === item.id ? { ...it, plannedQuantity: newQuantity } : it,
+      ),
     );
+
+    try {
+      const updated = await updateListProduct(item.id, {
+        plannedQuantity: newQuantity,
+        actualQuantity: item.actualQuantity,
+        currentPrice: priceOf(item),
+        isChecked: item.checked,
+      });
+      setItems((prev) =>
+        prev.map((it) => (it.id === updated.id ? updated : it)),
+      );
+    } catch (err) {
+      setItems(previous);
+      Alert.alert("Ops", errorMessage(err));
+    }
   };
 
-  // Remover item da lista
-  const handleRemoveItem = (id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+  // Remover item da cestinha
+  const handleRemoveItem = async (item: ListProduct) => {
+    const previous = items;
+    setItems((prev) => prev.filter((it) => it.id !== item.id));
+
+    try {
+      await deleteListProduct(item.id);
+    } catch (err) {
+      setItems(previous);
+      Alert.alert("Ops", errorMessage(err));
+    }
   };
 
-  // Navegar para a tela de compras
-  const handleStartShopping = () => {
+  // Marcar/desmarcar o item (POST /list-products/{id}/toggle-check)
+  const handleToggleCheck = async (item: ListProduct) => {
+    const previous = items;
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === item.id ? { ...it, checked: !it.checked } : it,
+      ),
+    );
+
+    try {
+      const updated = await toggleListProductCheck(item.id);
+      setItems((prev) =>
+        prev.map((it) => (it.id === updated.id ? updated : it)),
+      );
+    } catch (err) {
+      setItems(previous);
+      Alert.alert("Ops", errorMessage(err));
+    }
+  };
+
+  const handleAddProduct = async (product: Product) => {
+    if (!list) return;
+    setCatalogVisible(false);
+
+    try {
+      const created = await addListProduct({
+        shoppingListId: list.id,
+        productId: product.id,
+        plannedQuantity: 1,
+        basePrice: product.lastPrice ?? 0,
+      });
+      setItems((prev) => [...prev, created]);
+    } catch (err) {
+      Alert.alert("Ops", errorMessage(err));
+    }
+  };
+
+  // Move a cestinha para "No mercado"
+  const handleStartShopping = async () => {
+    if (!list) return;
     if (items.length === 0) {
-      Alert.alert('Atenção', 'Adicione pelo menos um item antes de ir ao mercado.');
+      Alert.alert(
+        "Quase lá",
+        "Coloque pelo menos um item antes de ir pro mercado.",
+      );
       return;
     }
-    router.push({
-      pathname: '/shopping',
-      params: { listData: JSON.stringify(items) },
-    });
+
+    try {
+      await updateListStatus(list.id, "SHOPPING");
+      router.replace("/tabs/lists");
+    } catch (err) {
+      Alert.alert("Ops", errorMessage(err));
+    }
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <Text style={styles.errorEmoji}>🧺</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.retryText}>Voltar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       {/* CABEÇALHO */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Planejamento</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title} numberOfLines={1}>
+            {list?.name ?? "Cestinha"}
+          </Text>
           <Text style={styles.subtitle}>
-            {mode === 'duplicate' ? 'Cópia da última compra' : 'Nova lista de compras'}
+            <Text style={styles.subtitleNumber}>{checkedCount}</Text>
+            {" de "}
+            <Text style={styles.subtitleNumber}>{items.length}</Text>
+            {" na sacola"}
           </Text>
         </View>
 
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => {
-            /* Abrir Modal de Catálogo */
-          }}
+          onPress={() => setCatalogVisible(true)}
         >
-          <FontAwesome5 name="plus" size={16} color="#0d1321" />
+          <FontAwesome5 name="plus" size={14} color={colors.onPrimary} />
           <Text style={styles.addButtonText}>Adicionar</Text>
         </TouchableOpacity>
       </View>
 
-      {/* BARRA DE CATEGORIAS IMPORTADA */}
+      {/* PROGRESSO DA CESTINHA */}
+      <View style={styles.progressTrack}>
+        <View
+          style={[
+            styles.progressFill,
+            {
+              width: `${Math.round(progress * 100)}%`,
+              backgroundColor: progress === 1 ? colors.success : colors.primary,
+            },
+          ]}
+        />
+      </View>
+
+      {/* BARRA DE CATEGORIAS (GET /categories) */}
       <CategoryTabs
-        categories={CATEGORIES_MOCK}
+        categories={categories}
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
       />
 
-      {/* LISTA DE ITENS */}
-      {loading ? (
-        <ActivityIndicator size="large" color="#F59E0B" style={{ marginTop: 40 }} />
-      ) : (
-        <FlatList
-          data={filteredItems}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <FontAwesome5 name="clipboard-list" size={48} color="#374151" />
-              <Text style={styles.emptyText}>Nenhum item encontrado.</Text>
-              <Text style={styles.emptySubtext}>
-                {selectedCategory === 'Todas'
-                  ? 'Clique em "Adicionar" para buscar itens do catálogo.'
-                  : `Não há itens cadastrados na categoria "${selectedCategory}".`}
+      {/* ITENS DA CESTINHA (GET /list-products/list/{id}) */}
+      <FlatList
+        data={filteredItems}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyEmoji}>🧺</Text>
+            <Text style={styles.emptyText}>
+              Sua cestinha está vazia. Bora encher?
+            </Text>
+            <Text style={styles.emptySubtext}>
+              {selectedCategory === ALL_CATEGORIES
+                ? 'Toque em "Adicionar" para buscar itens do catálogo.'
+                : `Nada de ${selectedCategory} por aqui ainda.`}
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <View style={styles.itemCard}>
+            {/* CHECKBOX GRANDE */}
+            <TouchableOpacity
+              style={[styles.checkbox, item.checked && styles.checkboxChecked]}
+              onPress={() => handleToggleCheck(item)}
+            >
+              {item.checked && (
+                <FontAwesome5 name="check" size={12} color={colors.onPrimary} />
+              )}
+            </TouchableOpacity>
+
+            <Text style={styles.itemEmoji}>
+              {categoryEmoji(item.product.category?.name)}
+            </Text>
+
+            <View style={styles.itemInfo}>
+              <Text
+                style={[
+                  styles.itemName,
+                  item.checked && styles.itemNameChecked,
+                ]}
+                numberOfLines={1}
+              >
+                {item.product.name}
+              </Text>
+              <Text style={styles.itemCategory}>
+                {item.product.category?.name ?? "Sem categoria"} ·{" "}
+                <Text style={styles.itemPrice}>{currency(priceOf(item))}</Text>
               </Text>
             </View>
-          }
-          renderItem={({ item }) => (
-            <View style={styles.itemCard}>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemCategory}>{item.category}</Text>
-              </View>
 
-              {/* CONTROLES DE QUANTIDADE */}
-              <View style={styles.quantityContainer}>
-                <TouchableOpacity
-                  style={styles.qtyButton}
-                  onPress={() => handleUpdateQuantity(item.id, -1)}
-                >
-                  <FontAwesome5 name="minus" size={12} color="#F59E0B" />
-                </TouchableOpacity>
-
-                <Text style={styles.qtyText}>{item.quantity}</Text>
-
-                <TouchableOpacity
-                  style={styles.qtyButton}
-                  onPress={() => handleUpdateQuantity(item.id, 1)}
-                >
-                  <FontAwesome5 name="plus" size={12} color="#F59E0B" />
-                </TouchableOpacity>
-              </View>
-
-              {/* BOTÃO REMOVER */}
+            {/* CONTROLES DE QUANTIDADE */}
+            <View style={styles.quantityContainer}>
               <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => handleRemoveItem(item.id)}
+                style={styles.qtyButton}
+                onPress={() => handleUpdateQuantity(item, -1)}
               >
-                <FontAwesome5 name="trash-alt" size={16} color="#EF4444" />
+                <FontAwesome5 name="minus" size={12} color={colors.primary} />
+              </TouchableOpacity>
+
+              <Text style={styles.qtyText}>{item.plannedQuantity}</Text>
+
+              <TouchableOpacity
+                style={styles.qtyButton}
+                onPress={() => handleUpdateQuantity(item, 1)}
+              >
+                <FontAwesome5 name="plus" size={12} color={colors.primary} />
               </TouchableOpacity>
             </View>
-          )}
-        />
-      )}
+
+            {/* BOTÃO REMOVER */}
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleRemoveItem(item)}
+            >
+              <FontAwesome5
+                name="trash-alt"
+                size={16}
+                color={colors.tertiary}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
+      />
 
       {/* RODAPÉ / BOTÃO IR PRO MERCADO */}
       <View style={styles.footer}>
+        <Text style={styles.totalText}>
+          Estimativa: <Text style={styles.totalValue}>{currency(total)}</Text>
+        </Text>
         <TouchableOpacity
-          style={[styles.startShoppingButton, items.length === 0 && styles.disabledButton]}
+          style={[
+            styles.startShoppingButton,
+            items.length === 0 && styles.disabledButton,
+          ]}
           onPress={handleStartShopping}
           disabled={items.length === 0}
         >
-          <FontAwesome5 name="shopping-cart" size={18} color="#0d1321" />
-          <Text style={styles.startShoppingText}>Ir para o Mercado ({items.length})</Text>
+          <FontAwesome5
+            name="shopping-cart"
+            size={16}
+            color={colors.onPrimary}
+          />
+          <Text style={styles.startShoppingText}>
+            Ir pro mercado ({items.length})
+          </Text>
         </TouchableOpacity>
       </View>
+
+      <ProductPickerModal
+        visible={isCatalogVisible}
+        category={selectedCategory}
+        onClose={() => setCatalogVisible(false)}
+        onSelectProduct={handleAddProduct}
+      />
     </View>
   );
 }
@@ -204,128 +419,215 @@ export default function PlanningScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d1321',
-    paddingTop: 50,
+    backgroundColor: colors.bg,
+    paddingTop: 56,
+  },
+  centered: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.xxl,
+  },
+  errorEmoji: {
+    fontSize: 40,
+  },
+  errorText: {
+    ...typography.body,
+    color: colors.text,
+    textAlign: "center",
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    minHeight: TOUCH_TARGET,
+    justifyContent: "center",
+  },
+  retryText: {
+    fontFamily: fonts.textBold,
+    fontSize: 16,
+    color: colors.onPrimary,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.screen,
+    marginBottom: spacing.md,
+    gap: spacing.md,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFF',
+    ...typography.screenTitle,
+    color: colors.text,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#9CA3AF',
+    fontFamily: fonts.text,
+    fontSize: 13,
+    color: colors.textSecondary,
     marginTop: 2,
   },
+  subtitleNumber: {
+    ...typography.numberSmall,
+    color: colors.textSecondary,
+  },
   addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F59E0B',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    minHeight: TOUCH_TARGET,
+    gap: spacing.sm,
   },
   addButtonText: {
-    color: '#0d1321',
-    fontWeight: 'bold',
-    fontSize: 14,
+    fontFamily: fonts.textMedium,
+    fontSize: 13,
+    color: colors.onPrimary,
+  },
+  progressTrack: {
+    height: 6,
+    marginHorizontal: spacing.screen,
+    marginBottom: spacing.lg,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface2,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: radius.pill,
   },
   listContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: spacing.screen,
+    paddingBottom: spacing.screen,
+    gap: spacing.md,
   },
   itemCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1F2937',
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 10,
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface1,
+    padding: spacing.md,
+    borderRadius: radius.card,
+    minHeight: 56,
+    gap: spacing.md,
+  },
+  checkbox: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  itemEmoji: {
+    fontSize: 20,
   },
   itemInfo: {
     flex: 1,
+    gap: 2,
   },
   itemName: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.itemName,
+    color: colors.text,
+  },
+  itemNameChecked: {
+    color: colors.textMuted,
+    textDecorationLine: "line-through",
   },
   itemCategory: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginTop: 2,
+    fontFamily: fonts.text,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  itemPrice: {
+    ...typography.numberSmall,
+    color: colors.textSecondary,
   },
   quantityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#111827',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    marginRight: 12,
-    gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface2,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    gap: spacing.sm,
   },
   qtyButton: {
-    padding: 6,
+    width: 32,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
   },
   qtyText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 14,
+    ...typography.number,
+    color: colors.text,
     minWidth: 18,
-    textAlign: 'center',
+    textAlign: "center",
   },
   deleteButton: {
-    padding: 6,
+    width: TOUCH_TARGET - 8,
+    height: TOUCH_TARGET - 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 60,
+    gap: spacing.sm,
+  },
+  emptyEmoji: {
+    fontSize: 40,
   },
   emptyText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 12,
+    ...typography.sectionTitle,
+    color: colors.text,
   },
   emptySubtext: {
-    color: '#6B7280',
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 6,
-    paddingHorizontal: 20,
+    ...typography.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: "center",
+    paddingHorizontal: spacing.screen,
   },
   footer: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#1F2937',
-    backgroundColor: '#0d1321',
+    padding: spacing.screen,
+    backgroundColor: colors.surface1,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    gap: spacing.md,
+  },
+  totalText: {
+    fontFamily: fonts.text,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: "center",
+  },
+  totalValue: {
+    ...typography.number,
+    color: colors.text,
   },
   startShoppingButton: {
-    backgroundColor: '#F59E0B',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 10,
+    backgroundColor: colors.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: TOUCH_TARGET,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.pill,
+    gap: spacing.sm,
   },
   disabledButton: {
     opacity: 0.5,
   },
   startShoppingText: {
-    color: '#0d1321',
-    fontWeight: 'bold',
+    fontFamily: fonts.textBold,
     fontSize: 16,
+    color: colors.onPrimary,
   },
 });
