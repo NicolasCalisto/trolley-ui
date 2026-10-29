@@ -4,7 +4,12 @@ import { Tabs } from "expo-router";
 import { ColorValue, StyleSheet, Text, View } from "react-native";
 
 type TabIconProps = {
-  name: "home" | "shopping-basket";
+  name:
+    | "home"
+    | "shopping-basket"
+    | "plus"
+    | "heart"
+    | "receipt-text-check-outline";
   label: string;
   color: ColorValue;
   focused: boolean;
@@ -75,7 +80,7 @@ export default function TabsLayout() {
         options={{
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
-              name="favorite"
+              name="heart"
               label="Favoritos"
               color={color}
               focused={focused}
@@ -86,12 +91,12 @@ export default function TabsLayout() {
 
       {/* Rota 4: historico de compras */}
       <Tabs.Screen
-        name="orders"
+        name="finished"
         options={{
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
-              name="receipt-text-check-outline"
-              label="Sacolas"
+              name="receipt"
+              label="Compras Feitas"
               color={color}
               focused={focused}
             />
