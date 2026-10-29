@@ -33,7 +33,7 @@ export default function Index() {
       keyboardShouldPersistTaps="handled"
     >
       <Image
-        source={require("@/assets/image.png")}
+        source={require("@/assets/img/image_01.png")}
         style={styles.illustration}
       />
 
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   },
   illustration: {
     width: "100%",
-    height: 280,
+    height: 360,
     resizeMode: "contain",
     marginTop: 84,
     marginBottom: spacing.md,
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: "auto",
-    marginBottom: spacing.xxl,
+    marginBottom: 120,
     paddingTop: spacing.xxl,
     gap: spacing.md,
   },

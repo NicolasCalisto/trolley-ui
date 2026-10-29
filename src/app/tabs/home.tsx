@@ -125,7 +125,7 @@ export default function Home() {
 
         <View style={styles.userIconBox}>
           <Image
-            source={require("@/assets/userIcon.png")}
+            source={require("@/assets/img/userIcon.png")}
             style={styles.userIcon}
           />
         </View>

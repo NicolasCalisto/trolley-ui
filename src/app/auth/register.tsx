@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import {
   BackHandler,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -41,7 +42,7 @@ export default function Register() {
     const backAction = () => handleBack();
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",
-      backAction
+      backAction,
     );
     return () => backHandler.remove();
   }, [currentStep]);
@@ -61,11 +62,15 @@ export default function Register() {
   };
 
   const selectedAvatarSource = AVATARS.find(
-    (a) => a.key === selectedAvatar
+    (a) => a.key === selectedAvatar,
   )?.source;
 
   return (
-    <View style={styles.mainContainer}>
+    <KeyboardAvoidingView
+      style={styles.mainContainer}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
       {/* BOTÃO DE RETORNO FIXO NO TOPO ESQUERDO */}
       <TouchableOpacity
         style={styles.backButton}
@@ -87,7 +92,7 @@ export default function Register() {
       >
         {/* 1. TOPO: Imagem Ilustrativa */}
         <Image
-          source={require("@/assets/image2.png")}
+          source={require("@/assets/img/image_02.png")}
           style={styles.illustration}
         />
 
@@ -103,16 +108,10 @@ export default function Register() {
         {/* 2. INDICADOR DE PROGRESSO (Stories) */}
         <View style={styles.storiesIndicatorContainer}>
           <View
-            style={[
-              styles.storyBar,
-              currentStep >= 0 && styles.storyBarActive,
-            ]}
+            style={[styles.storyBar, currentStep >= 0 && styles.storyBarActive]}
           />
           <View
-            style={[
-              styles.storyBar,
-              currentStep >= 1 && styles.storyBarActive,
-            ]}
+            style={[styles.storyBar, currentStep >= 1 && styles.storyBarActive]}
           />
         </View>
 
@@ -224,7 +223,12 @@ export default function Register() {
               Selecione o visual que mais combina com você:
             </Text>
 
-            <View style={styles.avatarGrid}>
+            {/* --- ACRESCENTAR ScrollView AQUI --- */}
+            <ScrollView
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.avatarGrid}
+              showsVerticalScrollIndicator={true}
+            >
               {AVATARS.map((avatar) => {
                 const isSelected = selectedAvatar === avatar.key;
                 return (
@@ -243,11 +247,11 @@ export default function Register() {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -260,9 +264,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: spacing.screen,
     paddingTop: Platform.OS === "android" ? 50 : 44,
-    paddingBottom: 60,
+    paddingBottom: 100,
   },
 
   /* Botão de Retorno Absoluto no Topo Esquerdo */
@@ -284,8 +289,8 @@ const styles = StyleSheet.create({
   },
 
   illustration: {
-   width: "100%",
-    height: 280,
+    width: "100%",
+    height: 360,
     resizeMode: "contain",
     marginTop: 48,
     marginBottom: spacing.md,
@@ -346,9 +351,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   avatarCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
     backgroundColor: colors.surface1,
     borderWidth: 1,
     borderColor: colors.border,
@@ -401,6 +406,7 @@ const styles = StyleSheet.create({
   modalContent: {
     backgroundColor: colors.surface1,
     width: "100%",
+    maxHeight: "80%",
     borderRadius: radius.card,
     padding: spacing.xl,
     borderWidth: 1,
@@ -411,6 +417,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.xs,
+  },
+  modalScrollView: {
+    maxHeight: 320,
+    width: "100%",
   },
   modalTitle: {
     ...typography.sectionTitle,
@@ -432,11 +442,12 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "center",
     gap: spacing.md,
+    paddingVertical: spacing.xs,
   },
   avatarOption: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 2,
     borderColor: "transparent",
     backgroundColor: colors.bg,
