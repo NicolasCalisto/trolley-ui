@@ -20,9 +20,6 @@ export default function Index() {
   const [password, setPassword] = useState("");
 
   const handleLogin = () => {
-    // Aqui entra a chamada para a sua API Spring Boot (/auth/login)
-    console.log("Entrando com:", email, password);
-    // Se der sucesso, redireciona para as abas principais
     router.replace("/tabs/home");
   };
 

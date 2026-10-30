@@ -3,7 +3,7 @@ import CustomButton from "@/components/customButton";
 import { authErrorMessage, register } from "@/services/auth";
 import { AuthInput } from "@/services/authInput";
 import { colors, fonts, radius, spacing, typography } from "@/theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -84,21 +84,18 @@ export default function Register() {
       setIsLoading(true);
       const avatarKey = selectedAvatar || DEFAULT_AVATAR;
 
-      console.log("iniciando registro");
       await register({
         username: name.trim(),
         email: email.trim(),
         password,
         avatar: avatarKey,
       });
-      console.log("registro concluído com sucesso");
 
       // Sucesso: Configura o modal de sucesso
       setModalType("success");
       setModalMessage("PEGUE SUA CESTINHA!");
       setModalFeedbackVisible(true);
     } catch (error) {
-      console.log("erro ao registrar:", error);
       const friendlyMessage = authErrorMessage(error, "register");
       // Erro: Configura o modal de erro
       setModalType("error");
@@ -320,11 +317,16 @@ export default function Register() {
               <>
                 <Text style={styles.feedbackTitle}>BOAS VINDAS</Text>
                 <Text style={styles.feedbackSubtitle}>{modalMessage}</Text>
+
                 <TouchableOpacity
                   style={styles.feedbackCenterButton}
                   onPress={handleModalClose}
                 >
-                  <Text style={styles.feedbackButtonText}>Ir para a Home</Text>
+                  <FontAwesome5
+                    name="shopping-basket"
+                    size={20}
+                    color={colors.bg}
+                  />
                 </TouchableOpacity>
               </>
             ) : (
