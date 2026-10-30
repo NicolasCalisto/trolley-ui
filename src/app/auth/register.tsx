@@ -1,10 +1,13 @@
 import { AVATARS, DEFAULT_AVATAR } from "@/assets/avatars/avatars";
 import CustomButton from "@/components/customButton";
+import { authErrorMessage, register } from "@/services/auth";
+import { AuthInput } from "@/services/authInput";
 import { colors, fonts, radius, spacing, typography } from "@/theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  Alert,
   BackHandler,
   Image,
   KeyboardAvoidingView,
@@ -13,7 +16,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -21,12 +23,18 @@ import {
 export default function Register() {
   const [currentStep, setCurrentStep] = useState(0);
 
-  // Estados dos campos, avatar e modal
+  // Estados dos campos, avatar e modal de seleção
   const [name, setName] = useState("");
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Estados para o Modal Customizado de Feedback (Sucesso / Erro)
+  const [modalFeedbackVisible, setModalFeedbackVisible] = useState(false);
+  const [modalType, setModalType] = useState<"success" | "error">("success");
+  const [modalMessage, setModalMessage] = useState("");
 
   const handleBack = () => {
     if (currentStep === 1) {
@@ -47,18 +55,67 @@ export default function Register() {
     return () => backHandler.remove();
   }, [currentStep]);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep === 0) {
+      if (!name.trim()) {
+        Alert.alert(
+          "Campo obrigatório",
+          "Por favor, digite seu nome ou apelido.",
+        );
+        return;
+      }
       setCurrentStep(1);
-    } else {
-      console.log({
-        name,
-        selectedAvatar: selectedAvatar || DEFAULT_AVATAR,
-        email,
-        password,
-      });
-      router.push("/tabs/home");
+      return;
     }
+
+    // Validações básicas antes de chamar a API
+    if (!email.trim() || !email.includes("@")) {
+      Alert.alert("E-mail inválido", "Por favor, insira um e-mail válido.");
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      Alert.alert("Senha fraca", "A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    // --- Chamada real à API Spring Boot ---
+    try {
+      setIsLoading(true);
+      const avatarKey = selectedAvatar || DEFAULT_AVATAR;
+
+      console.log("iniciando registro");
+      await register({
+        username: name.trim(),
+        email: email.trim(),
+        password,
+        avatar: avatarKey,
+      });
+      console.log("registro concluído com sucesso");
+
+      // Sucesso: Configura o modal de sucesso
+      setModalType("success");
+      setModalMessage("PEGUE SUA CESTINHA!");
+      setModalFeedbackVisible(true);
+    } catch (error) {
+      console.log("erro ao registrar:", error);
+      const friendlyMessage = authErrorMessage(error, "register");
+      // Erro: Configura o modal de erro
+      setModalType("error");
+      setModalMessage(friendlyMessage);
+      setModalFeedbackVisible(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Ação ao fechar o modal de feedback
+  const handleModalClose = () => {
+    setModalFeedbackVisible(false);
+    if (modalType === "success") {
+      router.replace("/tabs/home");
+    }
+    // Se for erro, apenas fecha e o usuário continua na tela de registro
   };
 
   const selectedAvatarSource = AVATARS.find(
@@ -145,10 +202,9 @@ export default function Register() {
               </TouchableOpacity>
 
               <View style={styles.inputGroup}>
-                <TextInput
-                  style={styles.input}
+                <AuthInput
+                  label="Nome ou Apelido"
                   placeholder="Como podemos te chamar?"
-                  placeholderTextColor={colors.textSecondary}
                   autoCapitalize="words"
                   value={name}
                   onChangeText={setName}
@@ -159,20 +215,18 @@ export default function Register() {
             // --- PASSO 2: E-mail e Senha ---
             <View style={styles.stepContent}>
               <View style={styles.inputGroup}>
-                <TextInput
-                  style={styles.input}
+                <AuthInput
+                  label="E-mail"
                   placeholder="E-mail"
-                  placeholderTextColor={colors.textSecondary}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   value={email}
                   onChangeText={setEmail}
                 />
-                <TextInput
-                  style={styles.input}
+                <AuthInput
+                  label="Senha"
                   placeholder="Senha"
-                  placeholderTextColor={colors.textSecondary}
-                  secureTextEntry={true}
+                  secure={true}
                   autoCapitalize="none"
                   value={password}
                   onChangeText={setPassword}
@@ -188,6 +242,7 @@ export default function Register() {
             title={currentStep === 0 ? "Avançar" : "Criar conta"}
             type="primary"
             onPress={handleNext}
+            disabled={isLoading}
           />
 
           {currentStep === 1 && (
@@ -195,12 +250,13 @@ export default function Register() {
               title="Voltar"
               type="secondary"
               onPress={handleBack}
+              disabled={isLoading}
             />
           )}
         </View>
       </ScrollView>
 
-      {/* MODAL DE AVATARES */}
+      {/* MODAL DE SELEÇÃO DE AVATAR */}
       <Modal
         visible={isAvatarModalVisible}
         transparent={true}
@@ -223,7 +279,6 @@ export default function Register() {
               Selecione o visual que mais combina com você:
             </Text>
 
-            {/* --- ACRESCENTAR ScrollView AQUI --- */}
             <ScrollView
               style={styles.modalScrollView}
               contentContainerStyle={styles.avatarGrid}
@@ -248,6 +303,49 @@ export default function Register() {
                 );
               })}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL CUSTOMIZADO DE FEEDBACK (SUCESSO / ERRO) */}
+      <Modal
+        visible={modalFeedbackVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleModalClose}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.feedbackModalContent}>
+            {modalType === "success" ? (
+              <>
+                <Text style={styles.feedbackTitle}>BOAS VINDAS</Text>
+                <Text style={styles.feedbackSubtitle}>{modalMessage}</Text>
+                <TouchableOpacity
+                  style={styles.feedbackCenterButton}
+                  onPress={handleModalClose}
+                >
+                  <Text style={styles.feedbackButtonText}>Ir para a Home</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.feedbackTitleError}>DESCULPE,</Text>
+                <Text style={styles.feedbackTitleErrorSub}>
+                  HOUVE UM PROBLEMA
+                </Text>
+                <Text style={styles.feedbackSubtitle}>{modalMessage}</Text>
+                <TouchableOpacity
+                  style={styles.feedbackCloseIconButton}
+                  onPress={handleModalClose}
+                >
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={24}
+                    color={colors.text}
+                  />
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -377,18 +475,6 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: spacing.md,
   },
-  input: {
-    backgroundColor: colors.surface1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
-    fontFamily: fonts.text,
-    fontSize: 16,
-    color: colors.text,
-    width: "100%",
-  },
 
   buttonContainer: {
     marginTop: spacing.xl,
@@ -455,5 +541,67 @@ const styles = StyleSheet.create({
   },
   avatarOptionSelected: {
     borderColor: colors.primary,
+  },
+
+  /* Estilos para o Modal Customizado de Feedback */
+  feedbackModalContent: {
+    backgroundColor: colors.surface1,
+    width: "85%",
+    borderRadius: radius.card,
+    padding: spacing.xl,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  feedbackTitle: {
+    fontFamily: fonts.textBold,
+    fontSize: 24,
+    color: colors.primary,
+    textAlign: "center",
+    marginBottom: spacing.xs,
+  },
+  feedbackTitleError: {
+    fontFamily: fonts.textBold,
+    fontSize: 22,
+    color: "#F87171",
+    textAlign: "center",
+  },
+  feedbackTitleErrorSub: {
+    fontFamily: fonts.textBold,
+    fontSize: 18,
+    color: colors.text,
+    textAlign: "center",
+    marginBottom: spacing.sm,
+  },
+  feedbackSubtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginBottom: spacing.xl,
+    marginTop: spacing.xs,
+  },
+  feedbackCenterButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.xxl,
+    borderRadius: radius.pill,
+    width: "100%",
+    alignItems: "center",
+  },
+  feedbackButtonText: {
+    fontFamily: fonts.textMedium,
+    fontSize: 16,
+    color: colors.bg,
+  },
+  feedbackCloseIconButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: spacing.sm,
   },
 });

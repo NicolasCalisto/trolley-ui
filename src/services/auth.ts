@@ -1,7 +1,7 @@
 import { clearToken, getToken, saveToken } from "./session";
 
 // Reaproveite a URL base que seus outros serviços já usam.
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+const API_URL = "https://trolley-api-3klp.onrender.com";
 
 // O Render pode demorar para "acordar" a API na primeira chamada.
 const TIMEOUT_MS = 60_000;
