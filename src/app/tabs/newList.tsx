@@ -37,11 +37,12 @@ export default function NewList() {
       setCreating(true);
       const list = await createList(trimmed);
       router.replace({
-        pathname: "/planning",
+        pathname: "/tabs/planning",
         params: { listId: String(list.id) },
       });
     } catch (error) {
       Alert.alert("Ops", errorMessage(error));
+      console.error("DETALHE DO ERRO DA API:", error?.response ?? error);
     } finally {
       setCreating(false);
     }

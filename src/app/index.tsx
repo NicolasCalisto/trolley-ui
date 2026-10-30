@@ -1,8 +1,10 @@
 import CustomButton from "@/components/customButton";
+import { authErrorMessage, login } from "@/services/auth";
 import { colors, fonts, radius, spacing, typography } from "@/theme";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
+  Alert,
   Image,
   Modal,
   ScrollView,
@@ -18,9 +20,28 @@ export default function Index() {
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    router.replace("/tabs/home");
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert("Atenção", "Preencha o e-mail e a senha.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // O login agora já busca o token, bate no /users/me e salva tudo na sessão
+      await login({ email, password });
+
+      setIsLoginModalVisible(false);
+      router.replace("/tabs/home");
+    } catch (error) {
+      // Usando authErrorMessage com o contexto correto de login
+      Alert.alert("Erro", authErrorMessage(error, "login"));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -61,7 +82,7 @@ export default function Index() {
       <Modal
         visible={isLoginModalVisible}
         transparent={true}
-        animationType="fade" // "fade" combina muito bem com modais centrais
+        animationType="fade"
         onRequestClose={() => setIsLoginModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
@@ -98,9 +119,10 @@ export default function Index() {
               />
 
               <CustomButton
-                title="Entrar na conta"
+                title={loading ? "Entrando..." : "Entrar na conta"}
                 type="primary"
                 onPress={handleLogin}
+                // disabled={loading} // Descomente caso o seu CustomButton aceite a propriedade disabled
               />
             </View>
           </View>
@@ -149,19 +171,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl,
     gap: spacing.md,
   },
-  // Estilos do Modal
-  // Estilos do Modal Centralizado
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center", // Alinha ao centro verticalmente
-    alignItems: "center", // Alinha ao centro horizontalmente
-    paddingHorizontal: spacing.screen, // Garante respiro nas laterais em telas pequenas
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing.screen,
   },
   modalContent: {
     backgroundColor: colors.surface1,
-    width: "100%", // Ocupa a largura disponível respeitando o padding da overlay
-    borderRadius: radius.lg, // Arredonda todos os cantos por igual
+    width: "100%",
+    borderRadius: radius.card,
     padding: spacing.xl,
     borderWidth: 1,
     borderColor: colors.border,

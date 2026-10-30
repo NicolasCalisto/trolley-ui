@@ -1,13 +1,9 @@
-import { clearToken, getToken, saveToken } from "./session";
-
-// Reaproveite a URL base que seus outros serviços já usam.
-const API_URL = "https://trolley-api-3klp.onrender.com";
+import { API_BASE_URL } from "./api";
+import { clearSession, getToken, saveSession } from "./session";
 
 // O Render pode demorar para "acordar" a API na primeira chamada.
 const TIMEOUT_MS = 60_000;
 
-// ATENÇÃO: confira os nomes dos campos nos DTOs da API
-// (RegisterRequestDto, LoginRequestDto, AuthResponseDto, UserProfileDto).
 export type RegisterInput = {
   username: string;
   email: string;
@@ -23,6 +19,7 @@ export type LoginInput = {
 type AuthResponse = { token?: string; accessToken?: string };
 
 export type UserProfile = {
+  id: string;
   username: string;
   email: string;
   avatar?: string | null;
@@ -45,7 +42,7 @@ async function request<T>(
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${API_URL}${path}`, {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
       method: options.method,
       headers: {
         "Content-Type": "application/json",
@@ -73,32 +70,58 @@ const extractToken = (data: AuthResponse): string => {
   return token;
 };
 
-// O cadastro já devolve o token: a pessoa entra logada.
-export async function register(input: RegisterInput): Promise<void> {
+// Busca perfil passando token opcionalmente (garante autenticação imediata)
+export async function getProfile(overrideToken?: string): Promise<UserProfile> {
+  const token = overrideToken ?? (await getToken());
+  return request<UserProfile>("/users/me", {
+    method: "GET",
+    token,
+  });
+}
+
+// O cadastro devolve o token e já salva a sessão completa
+export async function register(input: RegisterInput): Promise<UserProfile> {
   const data = await request<AuthResponse>("/auth/register", {
     method: "POST",
     body: input,
   });
-  await saveToken(extractToken(data));
+
+  const token = extractToken(data);
+  const profile = await getProfile(token);
+
+  await saveSession(token, {
+    id: String(profile.id ?? ""),
+    username: profile.username,
+    email: profile.email,
+    avatar: profile.avatar ?? null,
+  });
+
+  return profile;
 }
 
-export async function login(input: LoginInput): Promise<void> {
+// O login obtém o token, busca o perfil e salva no storage local
+export async function login(input: LoginInput): Promise<UserProfile> {
   const data = await request<AuthResponse>("/auth/login", {
     method: "POST",
     body: input,
   });
-  await saveToken(extractToken(data));
-}
 
-export async function logout(): Promise<void> {
-  await clearToken();
-}
+  const token = extractToken(data);
+  const profile = await getProfile(token);
 
-export async function getProfile(): Promise<UserProfile> {
-  return request<UserProfile>("/users/me", {
-    method: "GET",
-    token: await getToken(),
+  await saveSession(token, {
+    id: String(profile.id ?? ""),
+    username: profile.username,
+    email: profile.email,
+    avatar: profile.avatar ?? null,
   });
+
+  return profile;
+}
+
+// Limpa token e dados do usuário na saída
+export async function logout(): Promise<void> {
+  await clearSession();
 }
 
 export function authErrorMessage(

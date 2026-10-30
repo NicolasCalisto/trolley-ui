@@ -1,3 +1,5 @@
+import { getToken } from "./session"; // <--- 1. Importa a função que busca o token
+
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ?? "https://trolley-api-3klp.onrender.com";
 
@@ -48,11 +50,16 @@ export async function request<T>(
 ): Promise<T> {
   const { method = "GET", body, signal } = options;
 
+  // <--- 2. Recupera o token salvo (SecureStore ou localStorage)
+  const token = await getToken();
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers: {
       Accept: "application/json",
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      // <--- 3. Adiciona o cabeçalho Authorization se o token existir
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     signal,

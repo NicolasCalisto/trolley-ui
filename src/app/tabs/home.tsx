@@ -1,3 +1,4 @@
+import { UserAvatar } from "@/assets/avatars/userAvatar";
 import CustomButton from "@/components/customButton";
 import {
   ListSection,
@@ -7,15 +8,15 @@ import {
 import { CreateListModal } from "@/components/modal/createOrCopyModal";
 import { getListProducts } from "@/services/listProducts";
 import { getLists } from "@/services/lists";
+import { getUserInfo } from "@/services/session";
 import type { ListProduct, ShoppingList } from "@/services/types";
-import { colors, radius, spacing, TOUCH_TARGET, typography } from "@/theme";
+import { colors, radius, spacing, typography } from "@/theme";
 import { errorMessage, greeting } from "@/theme/listStatus";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -61,9 +62,23 @@ export default function Home() {
   const [groups, setGroups] = useState<Groups>(EMPTY_GROUPS);
   const [loading, setLoading] = useState(true);
 
+  const [userName, setUserName] = useState<string>("");
+  const [userAvatar, setUserAvatar] = useState<string>("");
+
+  console.log("usuario", userName, "", userAvatar);
+
   const loadHome = useCallback(async () => {
     try {
-      const allLists = await getLists();
+      // Carrega os dados do usuário e as listas em paralelo
+      const [userInfo, allLists] = await Promise.all([
+        getUserInfo().catch(() => null),
+        getLists(),
+      ]);
+
+      if (userInfo) {
+        if (userInfo.username) setUserName(userInfo.username);
+        if (userInfo.avatar) setUserAvatar(userInfo.avatar);
+      }
 
       // Mais recentes primeiro.
       const sorted = [...allLists].sort(
@@ -123,15 +138,20 @@ export default function Home() {
       <View style={styles.topBox}>
         <Text style={styles.titlePrincipal}>Minha Cestinha</Text>
 
+        {/* Substituído pelo componente reaproveitável */}
         <View style={styles.userIconBox}>
-          <Image
-            source={require("@/assets/img/userIcon.png")}
-            style={styles.userIcon}
+          <UserAvatar
+            size={40}
+            avatarUri={userAvatar}
+            onPress={() => {
+              // Exemplo: ir para a tela de perfil/configurações ao clicar no avatar
+              // router.push("/tabs/profile");
+            }}
           />
         </View>
       </View>
 
-      <Text style={styles.title}>{greeting("Nicolas")}</Text>
+      <Text style={styles.title}>{greeting(userName)}</Text>
       <Text style={styles.subtitle}>O que vai pra cestinha hoje?</Text>
 
       {loading ? (
@@ -152,7 +172,7 @@ export default function Home() {
             }
             onListPress={(list) =>
               router.push({
-                pathname: "/planning",
+                pathname: "/tabs/planning",
                 params: { listId: String(list.id) },
               })
             }
@@ -202,12 +222,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxl,
   },
   userIconBox: {
-    width: TOUCH_TARGET,
-    height: TOUCH_TARGET,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface1,
-    justifyContent: "center",
-    alignItems: "center",
     marginLeft: "auto",
   },
   userIcon: {

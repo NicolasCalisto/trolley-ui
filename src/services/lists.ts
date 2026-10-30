@@ -1,8 +1,8 @@
 import { buildQuery, request } from "./api";
 import type {
-    DeletedResponse,
-    ShoppingList,
-    ShoppingListStatus,
+  DeletedResponse,
+  ShoppingList,
+  ShoppingListStatus,
 } from "./types";
 
 export function getLists(
@@ -19,8 +19,26 @@ export function getListById(
   return request<ShoppingList>(`/lists/${id}`, { signal });
 }
 
+export interface CreateListInput {
+  name: string;
+  emoji?: string | null;
+  plannedDate?: string | null;
+}
+
 export function createList(name: string): Promise<ShoppingList> {
-  return request<ShoppingList>("/lists", { method: "POST", body: { name } });
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  const plannedDate = `${year}-${month}-${day}`;
+
+  return request<ShoppingList>("/lists", {
+    method: "POST",
+    body: {
+      name,
+      plannedDate, // Envia também a data formatada em LocalDate (YYYY-MM-DD)
+    },
+  });
 }
 
 export function updateListStatus(
